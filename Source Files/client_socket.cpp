@@ -1,26 +1,32 @@
 /*
 	Jared Hebert
+	Andrew O'Brein
 	EECE.4830
-	Project Phase 1
-	Creat UDP CLient
+	UDP CLient
 
-	code from https://www.binarytides.com/udp-socket-programming-in-winsock/ used
+	some code from https://www.binarytides.com/udp-socket-programming-in-winsock/ used
 */
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 
 #include<stdio.h>
-#include <iostream>
+#include<stdlib.h>
+#include<time.h>
+#include<iostream>
 #include<winsock2.h>
-#include <WS2tcpip.h>
+#include<WS2tcpip.h>
 
 
 using namespace::std;
 
 #pragma comment(lib,"ws2_32.lib") //Winsock Library
 
-#define BUFLEN 1025
+#define BUFLEN 1025 
+#define packetDebugMode 0
+
+#define corruptionPercent 0.000
+#define corruptionStrength 0.000
 
 char inStr[] = "bmp_small.bmp";
 char outStr[] = "bmp_out.bmp";
@@ -58,7 +64,9 @@ int Make_File(FILE** fpOut, char* packetData) {
 	int fwriteReturn;
 	int fileEnd = 0;
 
+
 	fwriteReturn = fwrite(packetData, 1, 1024, *fpOut);
+	printf("fwriteReturn = %d\n", fwriteReturn);
 	if (fwriteReturn != 1024) {
 		fileEnd = 1;
 	}
@@ -66,7 +74,7 @@ int Make_File(FILE** fpOut, char* packetData) {
 	return fileEnd;
 }
 
-int Corruptor_Challenge(float challenge, float corruption_amount, char* packetData) {
+int Corruptor_Challenge(float challenge	, float corruption_amount, char* packetData) {
 	/*
 		passes a pacekt of data through a challenge, difficulty determined by the value of challenge in a decimal representation of the percent
 		difficulty, 3 sig-figs.
@@ -76,7 +84,7 @@ int Corruptor_Challenge(float challenge, float corruption_amount, char* packetDa
 		if the challenge hits, the packet will be randomly disrupted. if not it will be unaffected.
 
 		returns 1 if challenge hits, otherwise 0
-
+	
 	*/
 
 	int random_num, challenge_result;
@@ -104,23 +112,36 @@ int Corruptor_Challenge(float challenge, float corruption_amount, char* packetDa
 	return challenge_result;
 }
 
+
+
+
 int main(int argc, char* argv[])
 {
 	WSADATA wsa;
-	SOCKET server;
-	sockaddr_in server_addr, client;
+	SOCKET client;
+	sockaddr_in client_addr, si_other;
 	hostent* localHost;
-	int slen, recv_len;
-	char* localIP;
-	char buf[BUFLEN];
-	char ack[BUFLEN] = "Ack";
-	char done_message[BUFLEN] = "file_send_done";
-
+	
+	FILE* fpIn;
 	FILE* fpOut;
 
-	slen = sizeof(client);
+	char buf[BUFLEN];
+	char message[BUFLEN] = "file_send_done";
 
-	//init winsock library
+	int slen;
+
+	slen = sizeof(si_other);
+
+	char* localIP;
+
+	int imgSize;	//in kB
+	char packetData[BUFLEN];
+
+	srand(time(NULL));		//Initialize random numbers
+
+
+
+	//Init winsock library
 	printf("\nInitialising Winsock...");
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
 	{
@@ -131,7 +152,7 @@ int main(int argc, char* argv[])
 	printf("Initialised.\n");
 
 	//create socket
-	if ((server = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET)
+	if ((client = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET)
 	{
 		printf("Could not create socket : %d", WSAGetLastError());
 	}
@@ -140,85 +161,111 @@ int main(int argc, char* argv[])
 
 	//cout << "Local IP: " << inet_addr("127.0.0.1") << endl;
 
-	//define server address
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
-	server_addr.sin_port = htons(8888);
+	//define address of server to cennect to
+	si_other.sin_family = AF_INET;
+	si_other.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+	si_other.sin_port = htons(8888);
 
-	//bind socket to defined address
-	if (bind(server, (SOCKADDR*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
+	//Open files
 
-		printf("Bind failed with error code : %d", WSAGetLastError());
-		exit(EXIT_FAILURE);
-
-	}
-
-	printf("Bind Done\n");
-
-	fpOut = fopen(outStr, "wb");
-	if (fpOut == NULL) {
-		printf("Out file failed to open :( \n");
+	fpIn = fopen(inStr, "rb");
+	if (fpIn == NULL) {
+		printf("In file failed to open :( \n");
 		return 1;
 	}
 
+	if (packetDebugMode == 1) {
+
+		fpOut = fopen(outStr, "wb");
+		if (fpOut == NULL) {
+			printf("Out file failed to open :( \n");
+			return 1;
+		}
+	}
+
+	// The function below ingests a file and reproduces it 1KB at a time, only run when the global packetDebugMode is set to 1.
+
 	int fileEnd = 0;
 
-	//keep listening for data
+	if (packetDebugMode == 1) {
+
+
+		int fileEnd = 0;
+		int fileEndOut = 0;
+		int packetCorrupted;
+
+		while (fileEnd == 0) {
+
+			fileEnd = Make_Packet(&fpIn, packetData);
+
+			packetCorrupted = Corruptor_Challenge(corruptionPercent, corruptionStrength, packetData);
+
+			if (packetCorrupted) {
+				printf("Packet Corrupted\n");
+			}
+			//printf("%s\n", packetData);
+			fileEndOut = Make_File(&fpOut, packetData);
+
+			//printf("fileEndIn = %d fileEndOut = %d\n", fileEnd, fileEndOut);
+
+		}
+
+		if (fileEnd == 1) {
+			fclose(fpIn);
+			fclose(fpOut);
+		}
+
+		return 0;
+	}
+
+	
+
+	//start communication
+
 	while (fileEnd == 0)
 	{
 
+		fileEnd = Make_Packet(&fpIn, packetData);
 
-		printf("Waiting for data...");
-		fflush(stdout);
+		if (fileEnd == 0) {
+			//send the message
+			if (sendto(client, packetData, strlen(packetData), 0, (struct sockaddr*)&si_other, slen) == SOCKET_ERROR)
+			{
+				printf("sendto() failed with error code : %d", WSAGetLastError());
+				exit(EXIT_FAILURE);
+			}
+		}
+		else {
+			//send the message
+			if (sendto(client, message, strlen(message), 0, (struct sockaddr*)&si_other, slen) == SOCKET_ERROR)
+			{
+				printf("sendto() failed with error code : %d", WSAGetLastError());
+				exit(EXIT_FAILURE);
+			}
+		}
 
+		//receive a reply and print it
 		//clear the buffer by filling null, it might have previously received data
 		memset(buf, '\0', BUFLEN);
-
 		//try to receive some data, this is a blocking call
-		if ((recv_len = recvfrom(server, buf, BUFLEN, 0, (struct sockaddr*)&client, &slen)) == SOCKET_ERROR)
+		if (recvfrom(client, buf, BUFLEN, 0, (struct sockaddr*)&si_other, &slen) == SOCKET_ERROR)
 		{
 			printf("recvfrom() failed with error code : %d", WSAGetLastError());
-			while (1);
 			exit(EXIT_FAILURE);
 		}
 
-		//print details of the client/peer and the data received
-		printf("Received packet from %s:%d\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
+		puts(buf);
 
-		if (strcmp(buf, done_message) == 0) {
-			fileEnd = 1;
-		}
-		else {
-			fileEnd = Make_File(&fpOut, buf);
-		}
-		
+		//delay 500ms to artificially slow program down
+		Sleep(100);
 
 		if (fileEnd == 1) {
-			if (sendto(server, buf, recv_len, 0, (struct sockaddr*)&client, slen) == SOCKET_ERROR)
-			{
-				printf("sendto() failed with error code : %d", WSAGetLastError());
-				while (1);
-				exit(EXIT_FAILURE);
-			}
-
-			fclose(fpOut);
-
+			fclose(fpIn);
 		}
-		else {
-			//now reply the client with ack
-			if (sendto(server, ack, recv_len, 0, (struct sockaddr*)&client, slen) == SOCKET_ERROR)
-			{
-				printf("sendto() failed with error code : %d", WSAGetLastError());
-				while (1);
-				exit(EXIT_FAILURE);
-			}
-		}
-
-	
 	}
 
 	//close socket
-	closesocket(server);
+	closesocket(client);
 	WSACleanup();
 
 	return 0;
