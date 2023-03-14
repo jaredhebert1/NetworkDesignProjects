@@ -21,7 +21,7 @@ using namespace::std;
 
 #pragma comment(lib,"ws2_32.lib") //Winsock Library
 
-#define BUFLEN 1025
+#define BUFLEN 10000
 
 char inStr[] = "bmp_small.bmp";
 char outStr[] = "bmp_out.bmp";
@@ -58,8 +58,14 @@ int Make_File(FILE** fpOut, char* packetData) {
 
 	int fwriteReturn;
 	int fileEnd = 0;
+	char dataBuf[1024];
 
-	fwriteReturn = fwrite(packetData, 1, 1024, *fpOut);
+
+	for (int i = 0; i < 1024; ++i) {
+		dataBuf[i] = packetData[i];
+	}
+
+	fwriteReturn = fwrite(dataBuf, 1, 1024, *fpOut);
 	if (fwriteReturn != 1024) {
 		fileEnd = 1;
 	}
@@ -114,8 +120,8 @@ int main(int argc, char* argv[])
 	int slen, recv_len;
 	char* localIP;
 	char buf[BUFLEN];
-	char ack[BUFLEN] = "Ack";
-	char done_message[BUFLEN] = "file_send_done";
+	char ack[5] = "Ack";
+	char done_message[20] = "file_send_done";
 
 	FILE* fpOut;
 
