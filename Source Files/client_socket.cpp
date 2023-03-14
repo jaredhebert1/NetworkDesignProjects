@@ -22,7 +22,7 @@ using namespace::std;
 
 #pragma comment(lib,"ws2_32.lib") //Winsock Library
 
-#define BUFLEN 1025 
+#define BUFLEN 10000 
 #define packetDebugMode 0
 
 #define corruptionPercent 0.000
@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
 	FILE* fpOut;
 
 	char buf[BUFLEN];
-	char message[BUFLEN] = "file_send_done";
+	char message[20] = "file_send_done";
 
 	int slen;
 
@@ -135,7 +135,7 @@ int main(int argc, char* argv[])
 	char* localIP;
 
 	int imgSize;	//in kB
-	char packetData[BUFLEN];
+	char packetData[1024];
 
 	srand(time(NULL));		//Initialize random numbers
 
@@ -227,11 +227,13 @@ int main(int argc, char* argv[])
 
 		fileEnd = Make_Packet(&fpIn, packetData);
 
+
 		if (fileEnd == 0) {
 			//send the message
-			if (sendto(client, packetData, strlen(packetData), 0, (struct sockaddr*)&si_other, slen) == SOCKET_ERROR)
+			if (sendto(client, packetData, 1024, 0, (struct sockaddr*)&si_other, slen) == SOCKET_ERROR)
 			{
 				printf("sendto() failed with error code : %d", WSAGetLastError());
+				while (1);
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -240,6 +242,7 @@ int main(int argc, char* argv[])
 			if (sendto(client, message, strlen(message), 0, (struct sockaddr*)&si_other, slen) == SOCKET_ERROR)
 			{
 				printf("sendto() failed with error code : %d", WSAGetLastError());
+				while (1);
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -251,6 +254,7 @@ int main(int argc, char* argv[])
 		if (recvfrom(client, buf, BUFLEN, 0, (struct sockaddr*)&si_other, &slen) == SOCKET_ERROR)
 		{
 			printf("recvfrom() failed with error code : %d", WSAGetLastError());
+			while (1);
 			exit(EXIT_FAILURE);
 		}
 
